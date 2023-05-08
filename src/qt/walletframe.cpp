@@ -1,18 +1,18 @@
-// Copyright (c) 2011-2021 The Bitcoin Core developers
+// Copyright (c) 2011-2022 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <qt/walletframe.h>
 
-#include <fs.h>
-#include <node/ui_interface.h>
+#include <node/interface_ui.h>
 #include <psbt.h>
 #include <qt/guiutil.h>
 #include <qt/overviewpage.h>
 #include <qt/psbtoperationsdialog.h>
 #include <qt/walletmodel.h>
 #include <qt/walletview.h>
-#include <util/system.h>
+#include <util/fs.h>
+#include <util/fs_helpers.h>
 
 #include <cassert>
 #include <fstream>
@@ -55,9 +55,7 @@ WalletFrame::WalletFrame(const PlatformStyle* _platformStyle, QWidget* parent)
     walletStack->addWidget(no_wallet_group);
 }
 
-WalletFrame::~WalletFrame()
-{
-}
+WalletFrame::~WalletFrame() = default;
 
 void WalletFrame::setClientModel(ClientModel *_clientModel)
 {
@@ -214,7 +212,15 @@ void WalletFrame::gotoLoadPSBT(bool from_clipboard)
             return;
         }
         std::ifstream in{filename.toLocal8Bit().data(), std::ios::binary};
-        data.assign(std::istream_iterator<unsigned char>{in}, {});
+        data.assign(std::istreambuf_iterator<char>{in}, {});
+
+        // Some psbt files may be base64 strings in the file rather than binary data
+        std::string b64_str{data.begin(), data.end()};
+        b64_str.erase(b64_str.find_last_not_of(" \t\n\r\f\v") + 1); // Trim trailing whitespace
+        auto b64_dec = DecodeBase64(b64_str);
+        if (b64_dec.has_value()) {
+            data = b64_dec.value();
+        }
     }
 
     std::string error;

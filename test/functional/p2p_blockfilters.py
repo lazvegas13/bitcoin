@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2019-2021 The Bitcoin Core developers
+# Copyright (c) 2019-2022 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Tests NODE_COMPACT_FILTERS (BIP 157/158).
@@ -248,6 +248,11 @@ class CompactFiltersTest(BitcoinTestFramework):
         self.stop_node(0)
         self.nodes[0].extra_args = ["-peerblockfilters"]
         msg = "Error: Cannot set -peerblockfilters without -blockfilterindex."
+        self.nodes[0].assert_start_raises_init_error(expected_msg=msg)
+
+        self.log.info("Test unknown value to -blockfilterindex raises an error")
+        self.nodes[0].extra_args = ["-blockfilterindex=abc"]
+        msg = "Error: Unknown -blockfilterindex value abc."
         self.nodes[0].assert_start_raises_init_error(expected_msg=msg)
 
         self.log.info("Test -blockfilterindex with -reindex-chainstate raises an error")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2016-2021 The Bitcoin Core developers
+# Copyright (c) 2016-2022 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -35,7 +35,6 @@ EXCLUDE_DIRS = [
     "src/leveldb/",
     "src/minisketch",
     "src/secp256k1/",
-    "src/univalue/",
     "src/crc32c/",
 ]
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2009-2021 The Bitcoin Core developers
+// Copyright (c) 2009-2022 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -207,7 +207,7 @@ bool DecodeHexBlockHeader(CBlockHeader& header, const std::string& hex_header)
     if (!IsHex(hex_header)) return false;
 
     const std::vector<unsigned char> header_data{ParseHex(hex_header)};
-    CDataStream ser_header(header_data, SER_NETWORK, PROTOCOL_VERSION);
+    DataStream ser_header{header_data};
     try {
         ser_header >> header;
     } catch (const std::exception&) {
@@ -265,7 +265,7 @@ int ParseSighashString(const UniValue& sighash)
             {std::string("SINGLE"), int(SIGHASH_SINGLE)},
             {std::string("SINGLE|ANYONECANPAY"), int(SIGHASH_SINGLE|SIGHASH_ANYONECANPAY)},
         };
-        std::string strHashType = sighash.get_str();
+        const std::string& strHashType = sighash.get_str();
         const auto& it = map_sighash_values.find(strHashType);
         if (it != map_sighash_values.end()) {
             hash_type = it->second;

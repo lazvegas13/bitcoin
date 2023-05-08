@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021 The Bitcoin Core developers
+// Copyright (c) 2020-2022 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -6,15 +6,16 @@
 #include <addrman.h>
 #include <addrman_impl.h>
 #include <chainparams.h>
+#include <common/args.h>
 #include <merkleblock.h>
 #include <random.h>
 #include <test/fuzz/FuzzedDataProvider.h>
 #include <test/fuzz/fuzz.h>
 #include <test/fuzz/util.h>
+#include <test/fuzz/util/net.h>
 #include <test/util/setup_common.h>
 #include <time.h>
 #include <util/asmap.h>
-#include <util/system.h>
 
 #include <cassert>
 #include <cstdint>
@@ -113,11 +114,11 @@ void FillAddrman(AddrMan& addrman, FuzzedDataProvider& fuzzed_data_provider)
 
         for (size_t j = 0; j < num_addresses; ++j) {
             const auto addr = CAddress{CService{RandAddr(fuzzed_data_provider, fast_random_context), 8333}, NODE_NETWORK};
-            const auto time_penalty = fast_random_context.randrange(100000001);
+            const std::chrono::seconds time_penalty{fast_random_context.randrange(100000001)};
             addrman.Add({addr}, source, time_penalty);
 
-            if (n > 0 && addrman.size() % n == 0) {
-                addrman.Good(addr, GetTime());
+            if (n > 0 && addrman.Size() % n == 0) {
+                addrman.Good(addr, Now<NodeSeconds>());
             }
 
             // Add 10% of the addresses from more than one source.
@@ -161,7 +162,7 @@ public:
             CSipHasher hasher(0, 0);
             auto addr_key = a.GetKey();
             auto source_key = a.source.GetAddrBytes();
-            hasher.Write(a.nLastSuccess);
+            hasher.Write(TicksSinceEpoch<std::chrono::seconds>(a.m_last_success));
             hasher.Write(a.nAttempts);
             hasher.Write(a.nRefCount);
             hasher.Write(a.fInTried);
@@ -175,8 +176,8 @@ public:
         };
 
         auto addrinfo_eq = [](const AddrInfo& lhs, const AddrInfo& rhs) {
-            return std::tie(static_cast<const CService&>(lhs), lhs.source, lhs.nLastSuccess, lhs.nAttempts, lhs.nRefCount, lhs.fInTried) ==
-                   std::tie(static_cast<const CService&>(rhs), rhs.source, rhs.nLastSuccess, rhs.nAttempts, rhs.nRefCount, rhs.fInTried);
+            return std::tie(static_cast<const CService&>(lhs), lhs.source, lhs.m_last_success, lhs.nAttempts, lhs.nRefCount, lhs.fInTried) ==
+                   std::tie(static_cast<const CService&>(rhs), rhs.source, rhs.m_last_success, rhs.nAttempts, rhs.nRefCount, rhs.fInTried);
         };
 
         using Addresses = std::unordered_set<AddrInfo, decltype(addrinfo_hasher), decltype(addrinfo_eq)>;
@@ -269,25 +270,25 @@ FUZZ_TARGET_INIT(addrman, initialize_addrman)
                 }
                 const std::optional<CNetAddr> opt_net_addr = ConsumeDeserializable<CNetAddr>(fuzzed_data_provider);
                 if (opt_net_addr) {
-                    addr_man.Add(addresses, *opt_net_addr, fuzzed_data_provider.ConsumeIntegralInRange<int64_t>(0, 100000000));
+                    addr_man.Add(addresses, *opt_net_addr, std::chrono::seconds{ConsumeTime(fuzzed_data_provider, 0, 100000000)});
                 }
             },
             [&] {
                 const std::optional<CService> opt_service = ConsumeDeserializable<CService>(fuzzed_data_provider);
                 if (opt_service) {
-                    addr_man.Good(*opt_service, ConsumeTime(fuzzed_data_provider));
+                    addr_man.Good(*opt_service, NodeSeconds{std::chrono::seconds{ConsumeTime(fuzzed_data_provider)}});
                 }
             },
             [&] {
                 const std::optional<CService> opt_service = ConsumeDeserializable<CService>(fuzzed_data_provider);
                 if (opt_service) {
-                    addr_man.Attempt(*opt_service, fuzzed_data_provider.ConsumeBool(), ConsumeTime(fuzzed_data_provider));
+                    addr_man.Attempt(*opt_service, fuzzed_data_provider.ConsumeBool(), NodeSeconds{std::chrono::seconds{ConsumeTime(fuzzed_data_provider)}});
                 }
             },
             [&] {
                 const std::optional<CService> opt_service = ConsumeDeserializable<CService>(fuzzed_data_provider);
                 if (opt_service) {
-                    addr_man.Connected(*opt_service, ConsumeTime(fuzzed_data_provider));
+                    addr_man.Connected(*opt_service, NodeSeconds{std::chrono::seconds{ConsumeTime(fuzzed_data_provider)}});
                 }
             },
             [&] {
@@ -303,7 +304,7 @@ FUZZ_TARGET_INIT(addrman, initialize_addrman)
         /*max_pct=*/fuzzed_data_provider.ConsumeIntegralInRange<size_t>(0, 4096),
         /*network=*/std::nullopt);
     (void)const_addr_man.Select(fuzzed_data_provider.ConsumeBool());
-    (void)const_addr_man.size();
+    (void)const_addr_man.Size();
     CDataStream data_stream(SER_NETWORK, PROTOCOL_VERSION);
     data_stream << const_addr_man;
 }

@@ -1,10 +1,11 @@
-// Copyright (c) 2017-2020 The Bitcoin Core developers
+// Copyright (c) 2017-2022 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <random.h>
 
 #include <test/util/setup_common.h>
+#include <util/time.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -53,6 +54,16 @@ BOOST_AUTO_TEST_CASE(fastrandom_tests)
     BOOST_CHECK_EQUAL(ctx1.randbits(3), ctx2.randbits(3));
     BOOST_CHECK(ctx1.rand256() == ctx2.rand256());
     BOOST_CHECK(ctx1.randbytes(50) == ctx2.randbytes(50));
+    {
+        struct MicroClock {
+            using duration = std::chrono::microseconds;
+        };
+        FastRandomContext ctx{true};
+        // Check with clock type
+        BOOST_CHECK_EQUAL(47222, ctx.rand_uniform_duration<MicroClock>(1s).count());
+        // Check with time-point type
+        BOOST_CHECK_EQUAL(2782, ctx.rand_uniform_duration<SteadySeconds>(9h).count());
+    }
 
     // Check that a nondeterministic ones are not
     g_mock_deterministic_tests = false;
@@ -84,14 +95,14 @@ BOOST_AUTO_TEST_CASE(fastrandom_randbits)
         for (int j = 0; j < 1000; ++j) {
             uint64_t rangebits = ctx1.randbits(bits);
             BOOST_CHECK_EQUAL(rangebits >> bits, 0U);
-            uint64_t range = ((uint64_t)1) << bits | rangebits;
+            uint64_t range = (uint64_t{1}) << bits | rangebits;
             uint64_t rand = ctx2.randrange(range);
             BOOST_CHECK(rand < range);
         }
     }
 }
 
-/** Does-it-compile test for compatibility with standard C++11 RNG interface. */
+/** Does-it-compile test for compatibility with standard library RNG interface. */
 BOOST_AUTO_TEST_CASE(stdrandom_test)
 {
     FastRandomContext ctx;

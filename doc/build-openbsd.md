@@ -1,6 +1,6 @@
 # OpenBSD Build Guide
 
-**Updated for OpenBSD [7.0](https://www.openbsd.org/70.html)**
+**Updated for OpenBSD [7.3](https://www.openbsd.org/73.html)**
 
 This guide describes how to build bitcoind, command-line utilities, and GUI on OpenBSD.
 
@@ -34,23 +34,25 @@ It is not necessary to build wallet functionality to run either `bitcoind` or `b
 `sqlite3` is required to support [descriptor wallets](descriptors.md).
 
 ``` bash
-pkg_add install sqlite3
+pkg_add sqlite3
 ```
 
 ###### Legacy Wallet Support
 BerkeleyDB is only required to support legacy wallets.
 
 It is recommended to use Berkeley DB 4.8. You cannot use the BerkeleyDB library
-from ports. However you can build it yourself, [using the installation script included in contrib/](/contrib/install_db4.sh), like so, from the root of the repository.
+from ports. However you can build it yourself, [using depends](/depends).
 
 ```bash
-./contrib/install_db4.sh `pwd`
+gmake -C depends NO_BOOST=1 NO_LIBEVENT=1 NO_QT=1 NO_SQLITE=1 NO_NATPMP=1 NO_UPNP=1 NO_ZMQ=1 NO_USDT=1
+...
+to: /path/to/bitcoin/depends/x86_64-unknown-openbsd
 ```
 
 Then set `BDB_PREFIX`:
 
 ```bash
-export BDB_PREFIX="$PWD/db4"
+export BDB_PREFIX="/path/to/bitcoin/depends/x86_64-unknown-openbsd"
 ```
 
 #### GUI Dependencies
@@ -78,27 +80,20 @@ export AUTOMAKE_VERSION=1.16
 
 ### 1. Configuration
 
-Note that building with external signer support currently fails on OpenBSD,
-hence you have to explicitly disable it by passing the parameter
-`--disable-external-signer` to the configure script. The feature requires the
-header-only library boost::process, which is available on OpenBSD, but contains
-certain system calls and preprocessor defines like `waitid()` and `WEXITED` that
-are not available.
-
 There are many ways to configure Bitcoin Core, here are a few common examples:
 
 ##### Descriptor Wallet and GUI:
 This enables the GUI and descriptor wallet support, assuming `sqlite` and `qt5` are installed.
 
 ```bash
-./configure --disable-external-signer MAKE=gmake
+./configure MAKE=gmake
 ```
 
 ##### Descriptor & Legacy Wallet. No GUI:
 This enables support for both wallet types and disables the GUI:
 
 ```bash
-./configure --disable-external-signer --with-gui=no \
+./configure --with-gui=no \
     BDB_LIBS="-L${BDB_PREFIX}/lib -ldb_cxx-4.8" \
     BDB_CFLAGS="-I${BDB_PREFIX}/include" \
     MAKE=gmake

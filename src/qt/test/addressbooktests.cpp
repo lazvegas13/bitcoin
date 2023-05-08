@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021 The Bitcoin Core developers
+// Copyright (c) 2017-2022 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -24,6 +24,7 @@
 #include <chrono>
 
 #include <QApplication>
+#include <QLineEdit>
 #include <QMessageBox>
 #include <QTableView>
 #include <QTimer>
@@ -74,7 +75,7 @@ void TestAddAddressesToSendBook(interfaces::Node& node)
     auto wallet_loader = interfaces::MakeWalletLoader(*test.m_node.chain, *Assert(test.m_node.args));
     test.m_node.wallet_loader = wallet_loader.get();
     node.setContext(&test.m_node);
-    const std::shared_ptr<CWallet> wallet = std::make_shared<CWallet>(node.context()->chain.get(), "", gArgs, CreateMockWalletDatabase());
+    const std::shared_ptr<CWallet> wallet = std::make_shared<CWallet>(node.context()->chain.get(), "", CreateMockWalletDatabase());
     wallet->LoadWallet();
     wallet->SetWalletFlag(WALLET_FLAG_DESCRIPTORS);
     {
@@ -102,16 +103,18 @@ void TestAddAddressesToSendBook(interfaces::Node& node)
     QString s_label("already here (s)");
 
     // Define a new address (which should add to the address book successfully).
-    QString new_address;
+    QString new_address_a;
+    QString new_address_b;
 
     std::tie(r_key_dest, preexisting_r_address) = build_address();
     std::tie(s_key_dest, preexisting_s_address) = build_address();
-    std::tie(std::ignore, new_address) = build_address();
+    std::tie(std::ignore, new_address_a) = build_address();
+    std::tie(std::ignore, new_address_b) = build_address();
 
     {
         LOCK(wallet->cs_wallet);
-        wallet->SetAddressBook(r_key_dest, r_label.toStdString(), "receive");
-        wallet->SetAddressBook(s_key_dest, s_label.toStdString(), "send");
+        wallet->SetAddressBook(r_key_dest, r_label.toStdString(), wallet::AddressPurpose::RECEIVE);
+        wallet->SetAddressBook(s_key_dest, s_label.toStdString(), wallet::AddressPurpose::SEND);
     }
 
     auto check_addbook_size = [&wallet](int expected_size) {
@@ -124,7 +127,9 @@ void TestAddAddressesToSendBook(interfaces::Node& node)
 
     // Initialize relevant QT models.
     std::unique_ptr<const PlatformStyle> platformStyle(PlatformStyle::instantiate("other"));
-    OptionsModel optionsModel;
+    OptionsModel optionsModel(node);
+    bilingual_str error;
+    QVERIFY(optionsModel.Init(error));
     ClientModel clientModel(node, &optionsModel);
     WalletContext& context = *node.walletLoader().context();
     AddWallet(context, wallet);
@@ -159,16 +164,59 @@ void TestAddAddressesToSendBook(interfaces::Node& node)
     // Submit a new address which should add successfully - we expect the
     // warning message to be blank.
     EditAddressAndSubmit(
-        &editAddressDialog, QString("new"), new_address, QString(""));
+        &editAddressDialog, QString("io - new A"), new_address_a, QString(""));
     check_addbook_size(3);
     QCOMPARE(table_view->model()->rowCount(), 2);
+
+    EditAddressAndSubmit(
+        &editAddressDialog, QString("io - new B"), new_address_b, QString(""));
+    check_addbook_size(4);
+    QCOMPARE(table_view->model()->rowCount(), 3);
+
+    auto search_line = address_book.findChild<QLineEdit*>("searchLineEdit");
+
+    search_line->setText(r_label);
+    QCOMPARE(table_view->model()->rowCount(), 0);
+
+    search_line->setText(s_label);
+    QCOMPARE(table_view->model()->rowCount(), 1);
+
+    search_line->setText("io");
+    QCOMPARE(table_view->model()->rowCount(), 2);
+
+    // Check wildcard "?".
+    search_line->setText("io?new");
+    QCOMPARE(table_view->model()->rowCount(), 0);
+    search_line->setText("io???new");
+    QCOMPARE(table_view->model()->rowCount(), 2);
+
+    // Check wildcard "*".
+    search_line->setText("io*new");
+    QCOMPARE(table_view->model()->rowCount(), 2);
+    search_line->setText("*");
+    QCOMPARE(table_view->model()->rowCount(), 3);
+
+    search_line->setText(preexisting_r_address);
+    QCOMPARE(table_view->model()->rowCount(), 0);
+
+    search_line->setText(preexisting_s_address);
+    QCOMPARE(table_view->model()->rowCount(), 1);
+
+    search_line->setText(new_address_a);
+    QCOMPARE(table_view->model()->rowCount(), 1);
+
+    search_line->setText(new_address_b);
+    QCOMPARE(table_view->model()->rowCount(), 1);
+
+    search_line->setText("");
+    QCOMPARE(table_view->model()->rowCount(), 3);
 }
 
 } // namespace
 
 void AddressBookTests::addressBookTests()
 {
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
     if (QApplication::platformName() == "minimal") {
         // Disable for mac on "minimal" platform to avoid crashes inside the Qt
         // framework when it tries to look up unimplemented cocoa functions,

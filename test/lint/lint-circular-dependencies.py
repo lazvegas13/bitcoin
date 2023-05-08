@@ -12,17 +12,20 @@ import subprocess
 import sys
 
 EXPECTED_CIRCULAR_DEPENDENCIES = (
-    "chainparamsbase -> util/system -> chainparamsbase",
+    "chainparamsbase -> common/args -> chainparamsbase",
     "node/blockstorage -> validation -> node/blockstorage",
-    "index/coinstatsindex -> node/coinstats -> index/coinstatsindex",
-    "policy/fees -> txmempool -> policy/fees",
+    "node/utxo_snapshot -> validation -> node/utxo_snapshot",
     "qt/addresstablemodel -> qt/walletmodel -> qt/addresstablemodel",
     "qt/recentrequeststablemodel -> qt/walletmodel -> qt/recentrequeststablemodel",
     "qt/sendcoinsdialog -> qt/walletmodel -> qt/sendcoinsdialog",
     "qt/transactiontablemodel -> qt/walletmodel -> qt/transactiontablemodel",
     "wallet/fees -> wallet/wallet -> wallet/fees",
     "wallet/wallet -> wallet/walletdb -> wallet/wallet",
-    "node/coinstats -> validation -> node/coinstats",
+    "kernel/coinstats -> validation -> kernel/coinstats",
+    "kernel/mempool_persist -> validation -> kernel/mempool_persist",
+
+    # Temporary, removed in followup https://github.com/bitcoin/bitcoin/pull/24230
+    "index/base -> node/context -> net_processing -> index/blockfilterindex -> index/base",
 )
 
 CODE_DIR = "src"
@@ -35,14 +38,14 @@ def main():
     os.chdir(CODE_DIR)
     files = subprocess.check_output(
         ['git', 'ls-files', '--', '*.h', '*.cpp'],
-        universal_newlines=True,
+        text=True,
     ).splitlines()
 
     command = [sys.executable, "../contrib/devtools/circular-dependencies.py", *files]
     dependencies_output = subprocess.run(
         command,
         stdout=subprocess.PIPE,
-        universal_newlines=True,
+        text=True,
     )
 
     for dependency_str in dependencies_output.stdout.rstrip().split("\n"):

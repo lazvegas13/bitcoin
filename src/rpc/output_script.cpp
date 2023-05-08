@@ -26,11 +26,6 @@
 #include <tuple>
 #include <vector>
 
-namespace node {
-struct NodeContext;
-}
-using node::NodeContext;
-
 static RPCHelpMan validateaddress()
 {
     return RPCHelpMan{
@@ -124,7 +119,7 @@ static RPCHelpMan createmultisig()
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
         {
-            int required = request.params[0].get_int();
+            int required = request.params[0].getInt<int>();
 
             // Get the public keys
             const UniValue& keys = request.params[1].get_array();
@@ -163,11 +158,11 @@ static RPCHelpMan createmultisig()
             result.pushKV("descriptor", descriptor->ToString());
 
             UniValue warnings(UniValue::VARR);
-            if (!request.params[2].isNull() && OutputTypeFromDestination(dest) != output_type) {
+            if (descriptor->GetOutputType() != output_type) {
                 // Only warns if the user has explicitly chosen an address type we cannot generate
                 warnings.push_back("Unable to make chosen address type, please ensure no uncompressed public keys are present.");
             }
-            if (warnings.size()) result.pushKV("warnings", warnings);
+            PushWarnings(warnings, result);
 
             return result;
         },
@@ -200,8 +195,6 @@ static RPCHelpMan getdescriptorinfo()
         },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
         {
-            RPCTypeCheck(request.params, {UniValue::VSTR});
-
             FlatSigningProvider provider;
             std::string error;
             auto desc = Parse(request.params[0].get_str(), provider, error);
@@ -227,16 +220,17 @@ static RPCHelpMan deriveaddresses()
     return RPCHelpMan{"deriveaddresses",
         {"\nDerives one or more addresses corresponding to an output descriptor.\n"
          "Examples of output descriptors are:\n"
-         "    pkh(<pubkey>)                        P2PKH outputs for the given pubkey\n"
-         "    wpkh(<pubkey>)                       Native segwit P2PKH outputs for the given pubkey\n"
-         "    sh(multi(<n>,<pubkey>,<pubkey>,...)) P2SH-multisig outputs for the given threshold and pubkeys\n"
-         "    raw(<hex script>)                    Outputs whose scriptPubKey equals the specified hex scripts\n"
+         "    pkh(<pubkey>)                                     P2PKH outputs for the given pubkey\n"
+         "    wpkh(<pubkey>)                                    Native segwit P2PKH outputs for the given pubkey\n"
+         "    sh(multi(<n>,<pubkey>,<pubkey>,...))              P2SH-multisig outputs for the given threshold and pubkeys\n"
+         "    raw(<hex script>)                                 Outputs whose scriptPubKey equals the specified hex scripts\n"
+         "    tr(<pubkey>,multi_a(<n>,<pubkey>,<pubkey>,...))   P2TR-multisig outputs for the given threshold and pubkeys\n"
          "\nIn the above, <pubkey> either refers to a fixed public key in hexadecimal notation, or to an xpub/xprv optionally followed by one\n"
          "or more path elements separated by \"/\", where \"h\" represents a hardened child key.\n"
          "For more information on output descriptors, see the documentation in the doc/descriptors.md file.\n"},
         {
             {"descriptor", RPCArg::Type::STR, RPCArg::Optional::NO, "The descriptor."},
-            {"range", RPCArg::Type::RANGE, RPCArg::Optional::OMITTED_NAMED_ARG, "If a ranged descriptor is used, this specifies the end or the range (in [begin,end] notation) to derive."},
+            {"range", RPCArg::Type::RANGE, RPCArg::Optional::OMITTED, "If a ranged descriptor is used, this specifies the end or the range (in [begin,end] notation) to derive."},
         },
         RPCResult{
             RPCResult::Type::ARR, "", "",
@@ -251,7 +245,6 @@ static RPCHelpMan deriveaddresses()
         },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
         {
-            RPCTypeCheck(request.params, {UniValue::VSTR, UniValueType()}); // Range argument is checked later
             const std::string desc_str = request.params[0].get_str();
 
             int64_t range_begin = 0;
@@ -278,7 +271,7 @@ static RPCHelpMan deriveaddresses()
 
             UniValue addresses(UniValue::VARR);
 
-            for (int i = range_begin; i <= range_end; ++i) {
+            for (int64_t i = range_begin; i <= range_end; ++i) {
                 FlatSigningProvider provider;
                 std::vector<CScript> scripts;
                 if (!desc->Expand(i, key_provider, scripts, provider)) {

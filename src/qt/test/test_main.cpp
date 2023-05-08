@@ -1,4 +1,4 @@
-// Copyright (c) 2009-2021 The Bitcoin Core developers
+// Copyright (c) 2009-2022 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -43,8 +43,6 @@ Q_IMPORT_PLUGIN(QAndroidPlatformIntegrationPlugin)
 #endif
 #endif
 
-using node::NodeContext;
-
 const std::function<void(const std::string&)> G_TEST_LOG_FUN{};
 
 const std::function<std::vector<const char*>()> G_TEST_COMMAND_LINE_ARGUMENTS{};
@@ -58,9 +56,10 @@ int main(int argc, char* argv[])
     // regtest params.
     //
     // All tests must use their own testing setup (if needed).
-    {
+    fs::create_directories([] {
         BasicTestingSetup dummy{CBaseChainParams::REGTEST};
-    }
+        return gArgs.GetDataDirNet() / "blocks";
+    }());
 
     std::unique_ptr<interfaces::Init> init = interfaces::MakeGuiInit(argc, argv);
     gArgs.ForceSetArg("-listen", "0");
@@ -80,8 +79,6 @@ int main(int argc, char* argv[])
         setenv("QT_QPA_PLATFORM", "minimal", 0 /* overwrite */);
     #endif
 
-    // Don't remove this, it's needed to access
-    // QApplication:: and QCoreApplication:: in the tests
     BitcoinApplication app;
     app.setApplicationName("Bitcoin-Qt-test");
     app.createNode(*init);

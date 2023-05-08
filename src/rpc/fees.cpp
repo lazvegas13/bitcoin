@@ -1,12 +1,11 @@
 // Copyright (c) 2010 Satoshi Nakamoto
-// Copyright (c) 2009-2021 The Bitcoin Core developers
+// Copyright (c) 2009-2022 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <core_io.h>
 #include <policy/feerate.h>
 #include <policy/fees.h>
-#include <policy/policy.h>
 #include <rpc/protocol.h>
 #include <rpc/request.h>
 #include <rpc/server.h>
@@ -15,8 +14,6 @@
 #include <txmempool.h>
 #include <univalue.h>
 #include <util/fees.h>
-#include <util/system.h>
-#include <validation.h>
 
 #include <algorithm>
 #include <array>
@@ -66,9 +63,6 @@ static RPCHelpMan estimatesmartfee()
         },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
         {
-            RPCTypeCheck(request.params, {UniValue::VNUM, UniValue::VSTR});
-            RPCTypeCheckArgument(request.params[0], UniValue::VNUM);
-
             CBlockPolicyEstimator& fee_estimator = EnsureAnyFeeEstimator(request.context);
             const NodeContext& node = EnsureAnyNodeContext(request.context);
             const CTxMemPool& mempool = EnsureMemPool(node);
@@ -89,8 +83,8 @@ static RPCHelpMan estimatesmartfee()
             FeeCalculation feeCalc;
             CFeeRate feeRate{fee_estimator.estimateSmartFee(conf_target, &feeCalc, conservative)};
             if (feeRate != CFeeRate(0)) {
-                CFeeRate min_mempool_feerate{mempool.GetMinFee(gArgs.GetIntArg("-maxmempool", DEFAULT_MAX_MEMPOOL_SIZE) * 1000000)};
-                CFeeRate min_relay_feerate{::minRelayTxFee};
+                CFeeRate min_mempool_feerate{mempool.GetMinFee()};
+                CFeeRate min_relay_feerate{mempool.m_min_relay_feerate};
                 feeRate = std::max({feeRate, min_mempool_feerate, min_relay_feerate});
                 result.pushKV("feerate", ValueFromAmount(feeRate.GetFeePerK()));
             } else {
@@ -159,9 +153,6 @@ static RPCHelpMan estimaterawfee()
         },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
         {
-            RPCTypeCheck(request.params, {UniValue::VNUM, UniValue::VNUM}, true);
-            RPCTypeCheckArgument(request.params[0], UniValue::VNUM);
-
             CBlockPolicyEstimator& fee_estimator = EnsureAnyFeeEstimator(request.context);
 
             unsigned int max_target = fee_estimator.HighestTargetTracked(FeeEstimateHorizon::LONG_HALFLIFE);
